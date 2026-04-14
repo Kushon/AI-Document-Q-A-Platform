@@ -118,17 +118,29 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "3000:8080"   # Streamlit UI
     volumes:
       - ../gateway/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - user-service
       - document-service
       - query-service
+      - frontend
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
+
+  # ─── frontend (Streamlit) ───────────────────────────────────
+  frontend:
+    build:
+      context: ../services/frontend
+      dockerfile: Dockerfile
+    container_name: rag_frontend
+    restart: unless-stopped
+    environment:
+      GATEWAY_URL: http://gateway:80
 
   # ─── query-service ──────────────────────────────────────────
   query-service:

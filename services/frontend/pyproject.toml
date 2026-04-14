@@ -1,0 +1,10 @@
+[project]
+name = "frontend"
+version = "0.1.0"
+description = "Streamlit frontend for AI Document Q&A Platform"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "streamlit>=1.45.0",
+    "requests>=2.32.0",
+]
