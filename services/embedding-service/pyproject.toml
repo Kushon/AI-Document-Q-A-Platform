@@ -1,0 +1,16 @@
+[project]
+name = "embedding-service"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "aiokafka>=0.13.0",
+    "asyncpg>=0.31.0",
+    "greenlet>=3.4.0",
+    "minio>=7.2.20",
+    "openai>=2.31.0",
+    "pydantic-settings>=2.13.1",
+    "pypdf>=6.10.0",
+    "qdrant-client>=1.17.1",
+    "sqlalchemy>=2.0.49",
+]
