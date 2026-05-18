@@ -1,0 +1,42 @@
+---
+# Конфигурация Kafka-кластера (KRaft mode, без Zookeeper).
+
+kafka_namespace: "kafka"
+kafka_cluster_name: "pi-kafka"
+kafka_version: "3.9.0"
+kafka_metadata_version: "3.9-IV0"
+
+# Количество брокеров.
+# Для локального dev: 1 (combined controller+broker)
+# Для prod в плане: 3 брокера + 3 контроллера.
+kafka_broker_replicas: 1
+kafka_controller_replicas: 1
+
+# Ресурсы (бюджетно для 16 ГБ ноута).
+kafka_resources:
+  requests: { cpu: "200m", memory: "768Mi" }
+  limits:   { cpu: "1",    memory: "1Gi" }
+
+# Storage — ephemeral для dev, persistent-claim для prod.
+kafka_storage_type: "ephemeral"
+
+# JVM heap.
+kafka_jvm_opts: { "-Xms": "512m", "-Xmx": "512m" }
+
+# Топики, которые используют микросервисы из Блока 1.
+kafka_topics:
+  - name: "document.uploaded"
+    partitions: 3
+    replicas: 1
+    config:
+      retention.ms: "604800000"   # 7 дней
+      cleanup.policy: "delete"
+  - name: "embedding.completed"
+    partitions: 3
+    replicas: 1
+    config:
+      retention.ms: "604800000"
+      cleanup.policy: "delete"
+
+# Куда роль рендерит итоговые манифесты — ArgoCD из этой директории синкает.
+kafka_gitops_dir: "{{ playbook_dir }}/../../../gitops/platform/strimzi"

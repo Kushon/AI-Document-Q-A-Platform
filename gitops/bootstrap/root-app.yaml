@@ -1,0 +1,29 @@
+# Корневой Application паттерна App-of-Apps.
+# Этот Application указывает на директорию gitops/apps/, в которой лежат
+# дочерние Application'ы (Istio, Strimzi, observability, workloads и т.д.).
+# ArgoCD рекурсивно синкает всё содержимое.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Kushon/AI-Document-Q-A-Platform.git
+    targetRevision: feature/k8s-platform
+    path: gitops/apps
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false   # все ns уже созданы Terraform
+      - ApplyOutOfSyncOnly=true

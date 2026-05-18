@@ -1,0 +1,14 @@
+---
+# Версия Strimzi operator (KRaft mode стабилен с 0.43+).
+strimzi_operator_version: "0.45.0"
+
+# Namespace, где будут жить operator и кластер Kafka.
+strimzi_namespace: "kafka"
+
+# Куда роль рендерит сгенерированный ArgoCD Application
+# (после этого ArgoCD сам ставит Helm chart Strimzi-оператора).
+strimzi_gitops_dir: "{{ playbook_dir }}/../../../gitops/platform/strimzi"
+
+# Helm chart Strimzi.
+strimzi_helm_repo:  "oci://quay.io/strimzi-helm"
+strimzi_helm_chart: "strimzi-kafka-operator"

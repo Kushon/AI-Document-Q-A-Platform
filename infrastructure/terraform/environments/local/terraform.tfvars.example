@@ -1,0 +1,9 @@
+# Пример переменных для локального окружения.
+# Скопируйте: cp terraform.tfvars.example terraform.tfvars
+# и подставьте свои значения. Файл terraform.tfvars в .gitignore.
+
+postgres_password = "change-me"
+
+minio_secret_key = "change-me-minio"
+
+jwt_secret = "change-me-jwt-supersecret-32chars-min"

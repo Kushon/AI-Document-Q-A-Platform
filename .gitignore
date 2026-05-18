@@ -1,3 +1,15 @@
+# Terraform
+**/terraform.tfvars
+**/.terraform/
+**/.terraform.lock.hcl
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+
+# Kubernetes / Helm
+charts/*/charts/
+charts/*/Chart.lock
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -1,0 +1,21 @@
+---
+# Роль не применяет манифесты в кластер напрямую — она рендерит ArgoCD
+# Application в gitops/platform/strimzi/, а ArgoCD уже синкает в кластер.
+# Это сохраняет один runtime source-of-truth (Git).
+
+- name: Создать директорию для сгенерированных манифестов Strimzi-оператора
+  ansible.builtin.file:
+    path: "{{ strimzi_gitops_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Сгенерировать ArgoCD Application для Strimzi-оператора
+  ansible.builtin.template:
+    src: argocd-application.yaml.j2
+    dest: "{{ strimzi_gitops_dir }}/00-strimzi-operator-app.yaml"
+    mode: "0644"
+  register: strimzi_app_rendered
+
+- name: Показать, что было сгенерировано
+  ansible.builtin.debug:
+    msg: "Strimzi-operator ArgoCD Application: {{ strimzi_gitops_dir }}/00-strimzi-operator-app.yaml (changed={{ strimzi_app_rendered.changed }})"

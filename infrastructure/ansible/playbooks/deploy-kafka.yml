@@ -1,0 +1,13 @@
+---
+# Генерирует Kubernetes-манифесты для Strimzi-оператора и Kafka-кластера
+# в gitops/platform/strimzi/. После запуска нужно сделать git commit + push —
+# ArgoCD автоматически синкнет изменения в кластер.
+
+- name: Развернуть Kafka (Strimzi) через GitOps
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  roles:
+    - role: strimzi-operator
+    - role: kafka

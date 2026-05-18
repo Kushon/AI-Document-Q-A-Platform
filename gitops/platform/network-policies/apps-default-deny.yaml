@@ -1,0 +1,12 @@
+# Default-deny для namespace 'apps': запрещает любой ingress/egress, не
+# перечисленный явно в отдельных allow-политиках. eBPF-движок Cilium
+# применяет это правило на уровне ядра без iptables.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: apps
+spec:
+  endpointSelector: {}      # ко всем pod'ам в ns
+  ingress: []               # пустой список = deny all
+  egress: []

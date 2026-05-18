@@ -1,0 +1,85 @@
+# Strimzi KafkaCluster в KRaft mode.
+# Сгенерирован Ansible-ролью infrastructure/ansible/roles/kafka.
+---
+# KafkaNodePool: controllers (для маленького кластера combined с брокерами не нужен,
+# но KafkaNodePool обязателен в KRaft).
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: controller
+  namespace: {{ kafka_namespace }}
+  labels:
+    strimzi.io/cluster: {{ kafka_cluster_name }}
+spec:
+  replicas: {{ kafka_controller_replicas }}
+  roles:
+    - controller
+{% if kafka_broker_replicas == kafka_controller_replicas and kafka_broker_replicas == 1 %}
+    - broker          # combined mode для локального dev
+{% endif %}
+  storage:
+    type: {{ kafka_storage_type }}
+  resources:
+    requests:
+      cpu: "{{ kafka_resources.requests.cpu }}"
+      memory: "{{ kafka_resources.requests.memory }}"
+    limits:
+      cpu: "{{ kafka_resources.limits.cpu }}"
+      memory: "{{ kafka_resources.limits.memory }}"
+{% if kafka_broker_replicas > 1 or kafka_controller_replicas > 1 %}
+---
+# KafkaNodePool: brokers (отдельный пул в prod-режиме)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: broker
+  namespace: {{ kafka_namespace }}
+  labels:
+    strimzi.io/cluster: {{ kafka_cluster_name }}
+spec:
+  replicas: {{ kafka_broker_replicas }}
+  roles:
+    - broker
+  storage:
+    type: {{ kafka_storage_type }}
+  resources:
+    requests:
+      cpu: "{{ kafka_resources.requests.cpu }}"
+      memory: "{{ kafka_resources.requests.memory }}"
+    limits:
+      cpu: "{{ kafka_resources.limits.cpu }}"
+      memory: "{{ kafka_resources.limits.memory }}"
+{% endif %}
+---
+# Kafka cluster (KRaft mode без Zookeeper)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: {{ kafka_cluster_name }}
+  namespace: {{ kafka_namespace }}
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
+spec:
+  kafka:
+    version: "{{ kafka_version }}"
+    metadataVersion: "{{ kafka_metadata_version }}"
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+    config:
+      offsets.topic.replication.factor: {{ kafka_broker_replicas }}
+      transaction.state.log.replication.factor: {{ kafka_broker_replicas }}
+      transaction.state.log.min.isr: 1
+      default.replication.factor: {{ kafka_broker_replicas }}
+      min.insync.replicas: 1
+    jvmOptions:
+{% for k, v in kafka_jvm_opts.items() %}
+      "{{ k }}": "{{ v }}"
+{% endfor %}

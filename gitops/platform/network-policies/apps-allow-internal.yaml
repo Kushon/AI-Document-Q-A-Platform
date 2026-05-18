@@ -1,0 +1,47 @@
+# Allow-правила для namespace 'apps':
+#   - DNS (egress на kube-dns)
+#   - HTTP/REST между микросервисами внутри 'apps'
+#   - Egress на инфраструктурные сервисы (kafka, postgres, valkey, qdrant, minio)
+#   - Ingress с istio-system (sidecar-инжекция, ingress-gateway)
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-internal
+  namespace: apps
+spec:
+  endpointSelector: {}
+  ingress:
+    # Из istio-system (ingress-gateway, istiod)
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: istio-system
+    # Внутри namespace apps (сервис-к-сервису)
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: apps
+  egress:
+    # DNS — обязательно для резолва других сервисов
+    - toEndpoints:
+        - matchLabels:
+            k8s-app: kube-dns
+            k8s:io.kubernetes.pod.namespace: kube-system
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # Внутри namespace apps
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: apps
+    # Инфраструктура: kafka, postgres, valkey, qdrant, minio (namespace 'platform')
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: platform
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kafka
+    # Kubernetes API server (для service discovery в Istio)
+    - toEntities:
+        - kube-apiserver

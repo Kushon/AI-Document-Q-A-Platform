@@ -1,0 +1,39 @@
+# ArgoCD Application для установки Strimzi-оператора через Helm chart.
+# Сгенерирован Ansible-ролью infrastructure/ansible/roles/strimzi-operator.
+# Не редактировать вручную: правки делать в роли и пере-запускать playbook.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: strimzi-operator
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: {{ strimzi_helm_repo }}
+    chart: {{ strimzi_helm_chart }}
+    targetRevision: "{{ strimzi_operator_version }}"
+    helm:
+      releaseName: strimzi-operator
+      values: |
+        watchAnyNamespace: false
+        watchNamespaces:
+          - {{ strimzi_namespace }}
+        # Минимальные ресурсы для локального k3d
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ strimzi_namespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

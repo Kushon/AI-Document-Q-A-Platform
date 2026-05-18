@@ -1,0 +1,32 @@
+# KafkaTopic CR'ы. Strimzi Topic Operator создаёт топики в Kafka автоматически.
+# Сгенерирован Ansible-ролью infrastructure/ansible/roles/kafka.
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: document-uploaded
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: pi-kafka
+spec:
+  topicName: document.uploaded
+  partitions: 3
+  replicas: 1
+  config:
+    "retention.ms": "604800000"
+    "cleanup.policy": "delete"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: embedding-completed
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: pi-kafka
+spec:
+  topicName: embedding.completed
+  partitions: 3
+  replicas: 1
+  config:
+    "retention.ms": "604800000"
+    "cleanup.policy": "delete"

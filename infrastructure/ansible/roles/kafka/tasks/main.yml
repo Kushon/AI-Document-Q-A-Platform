@@ -1,0 +1,27 @@
+---
+- name: Создать директорию для сгенерированных манифестов Kafka
+  ansible.builtin.file:
+    path: "{{ kafka_gitops_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Сгенерировать KafkaNodePool + Kafka CR
+  ansible.builtin.template:
+    src: kafka-cluster.yaml.j2
+    dest: "{{ kafka_gitops_dir }}/10-kafka-cluster.yaml"
+    mode: "0644"
+  register: kafka_cluster_rendered
+
+- name: Сгенерировать KafkaTopic'и
+  ansible.builtin.template:
+    src: kafka-topics.yaml.j2
+    dest: "{{ kafka_gitops_dir }}/20-kafka-topics.yaml"
+    mode: "0644"
+  register: kafka_topics_rendered
+
+- name: Показать, что было сгенерировано
+  ansible.builtin.debug:
+    msg:
+      - "Kafka cluster: {{ kafka_gitops_dir }}/10-kafka-cluster.yaml (changed={{ kafka_cluster_rendered.changed }})"
+      - "Kafka topics:  {{ kafka_gitops_dir }}/20-kafka-topics.yaml (changed={{ kafka_topics_rendered.changed }})"
+      - "После запуска playbook'а закоммитьте изменения и ArgoCD синкнет их в кластер."
