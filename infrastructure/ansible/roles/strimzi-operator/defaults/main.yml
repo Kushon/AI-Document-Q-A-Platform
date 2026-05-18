@@ -7,8 +7,12 @@ strimzi_namespace: "kafka"
 
 # Куда роль рендерит сгенерированный ArgoCD Application
 # (после этого ArgoCD сам ставит Helm chart Strimzi-оператора).
-strimzi_gitops_dir: "{{ playbook_dir }}/../../../gitops/platform/strimzi"
+# Application для оператора — bootstrap-уровень (применяется напрямую,
+# рядом с root-app). Это даёт CRDs появиться до того, как ArgoCD синкнет
+# Kafka cluster/topics из gitops/platform/strimzi/.
+strimzi_gitops_dir: "{{ playbook_dir }}/../../../gitops/bootstrap"
 
-# Helm chart Strimzi.
-strimzi_helm_repo:  "oci://quay.io/strimzi-helm"
+# Helm chart Strimzi. Используем HTTPS-репозиторий (ArgoCD на стабильно
+# работает с OCI на quay.io — кешируется как "object required" ошибка).
+strimzi_helm_repo:  "https://strimzi.io/charts/"
 strimzi_helm_chart: "strimzi-kafka-operator"

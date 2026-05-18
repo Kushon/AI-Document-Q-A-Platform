@@ -114,8 +114,8 @@ VIP на macOS-хост не пробрасывается, но **полноце
 **Цель:** создать рабочую ветку и каркас директорий для DevOps-артефактов.
 
 ### Шаги
-- [ ] 0.1 Создать ветку `feature/k8s-platform` от `main`
-- [ ] 0.2 Создать структуру директорий:
+- [x] 0.1 Создать ветку `feature/k8s-platform` от `main`
+- [x] 0.2 Создать структуру директорий:
   ```
   infrastructure/
     terraform/
@@ -153,9 +153,9 @@ VIP на macOS-хост не пробрасывается, но **полноце
     runbook.md
     screenshots/
   ```
-- [ ] 0.3 Обновить корневой `README.md` секцией «DevOps-фаза» со ссылками
-- [ ] 0.4 Создать скрипт-оркестратор `infrastructure/scripts/bootstrap-all.sh` (наполнится в следующих фазах) — единая точка входа для развёртывания всего стека
-- [ ] 0.5 Версии devops-инструментов (k3d, kubectl, helm, terraform, ansible) зафиксировать прямо в bootstrap-скриптах через переменные (`K3D_VERSION=5.x.x` и т.д.). Python-зависимости — в `pyproject.toml` каждого сервиса (уже есть)
+- [ ] 0.3 Обновить корневой `README.md` секцией «DevOps-фаза» со ссылками *(делать не будем)*
+- [ ] 0.4 Создать скрипт-оркестратор `infrastructure/scripts/bootstrap-all.sh` (наполнится в следующих фазах) — единая точка входа для развёртывания всего стека *(пока не наполнен)*
+- [x] 0.5 Версии devops-инструментов (k3d, kubectl, helm, terraform, ansible) зафиксировать прямо в bootstrap-скриптах через переменные (`K3D_VERSION=5.x.x` и т.д.). Python-зависимости — в `pyproject.toml` каждого сервиса (уже есть)
 
 ---
 
@@ -164,38 +164,34 @@ VIP на macOS-хост не пробрасывается, но **полноце
 **Цель:** работающий 2-нодовый k3d-кластер с Cilium и автоскейлером.
 
 ### Шаг 1.1 — k3d cluster
-- [ ] Установить `k3d`, `kubectl`, `helm`, `cilium-cli`
-- [ ] Написать `infrastructure/scripts/bootstrap-k3d.sh`:
-  - создаёт кластер `pi-platform` с 2 worker'ами
+- [x] Установить `k3d`, `kubectl`, `helm`, `cilium-cli` *(через brew)*
+- [x] Написать `infrastructure/scripts/bootstrap-k3d.sh`:
+  - создаёт кластер `pi-platform` с **1 server + 2 agents**
   - отключает встроенный CNI (`--k3s-arg "--flannel-backend=none"`)
-  - отключает kube-proxy (`--disable-network-policy --disable=traefik`)
-  - регистрирует локальный registry на `localhost:5000`
-- [ ] Проверить: `kubectl get nodes` показывает 2 ноды в `NotReady` (ждут CNI)
+  - **НЕ отключает kube-proxy** (kubeProxyReplacement на k3d+Cilium 1.19 нестабилен; см. ADR-002)
+  - отключает `traefik` и встроенный network-policy controller
+  - регистрирует локальный registry `k3d-registry.localhost:5001` (5000 занят AirPlay)
+- [x] Проверить: `kubectl get nodes` показывает 3 ноды в `NotReady` (ждут CNI)
 
 ### Шаг 1.2 — Cilium как CNI
-- [ ] `infrastructure/scripts/install-cilium.sh`:
-  - `cilium install --version 1.16.x --set kubeProxyReplacement=true --set hubble.enabled=true --set hubble.ui.enabled=true --set hubble.relay.enabled=true`
-- [ ] `cilium status` → все компоненты OK
-- [ ] `cilium hubble port-forward` → проверить UI на :12000
-- [ ] Скриншот Hubble UI с трафиком
+- [x] `infrastructure/scripts/install-cilium.sh` — Cilium 1.19.4, `kubeProxyReplacement=false`, `hubble.enabled/relay/ui`, `tls.enabled=false` для локального dev
+- [x] `cilium status` → все компоненты OK (cilium DS 3/3, envoy 3/3, operator 1/1, hubble-relay 1/1, hubble-ui 2/2)
+- [ ] `cilium hubble port-forward` → проверить UI на :12000 *(не запускали, скрины в Фазу 7)*
+- [ ] Скриншот Hubble UI с трафиком *(Фаза 7)*
 
 ### Шаг 1.3 — Сетевые политики (eBPF)
-- [ ] Написать `CiliumNetworkPolicy` для namespace `apps`:
-  - запрет всему трафику по умолчанию (default-deny)
-  - разрешить только `frontend → istio-ingress`, `apps → kafka`, `apps → postgres`, `apps → valkey`, `apps → qdrant`
-- [ ] Положить в `gitops/platform/network-policies/`
+- [x] Написать `CiliumNetworkPolicy` для namespace `apps`:
+  - `default-deny` — запрет всему трафику по умолчанию
+  - `allow-internal` — DNS, внутренний трафик в apps, в platform/kafka, ingress от istio-system
+- [x] Положить в `gitops/platform/network-policies/` (ArgoCD App `network-policies`: Synced/Healthy)
 
 ### Шаг 1.4 — Автоскейлинг (Задание 1.2: Cluster Autoscaler)
-- [ ] Karpenter работает только с cloud-провайдерами → на k3d используем **Cluster Autoscaler** с k3d-провайдером
-- [ ] Установить CA через Helm (`autoscaler/cluster-autoscaler`) с конфигом:
-  - `--cloud-provider=k3d` (community fork) или `--cloud-provider=clusterapi` через CAPD
-  - Привязка к agent-пулу `min=2, max=5`
-  - `--scale-down-delay-after-add=2m`, `--scale-down-unneeded-time=3m`
-- [ ] ServiceAccount + RBAC: CA должен уметь читать pods/nodes и вызывать k3d API (через docker socket mount)
-- [ ] Скейл-ап тест: `kubectl scale deployment busybox --replicas=50` → видим pending pods → CA создаёт новую агент-ноду → pods schedule'ятся
-- [ ] Скейл-даун тест: удалить deployment → через `scale-down-unneeded-time` лишние ноды удаляются
-- [ ] **Дополнительно HPA** на микросервисах (`charts/<svc>/templates/hpa.yaml`): `minReplicas=2, maxReplicas=10, targetCPU=70%` — это драйвер для CA под нагрузкой Locust
-- [ ] Скриншот: график количества нод и pod'ов в Grafana во время нагрузочного теста
+- [x] Karpenter работает только с cloud-провайдерами → на k3d используем **Cluster Autoscaler** *(через chart `autoscaler/cluster-autoscaler` v9.46.0 с провайдером `clusterapi`)*
+- [x] Установить CA через Helm — `infrastructure/scripts/install-cluster-autoscaler.sh`
+- [x] ServiceAccount + RBAC создаются helm-чартом (`rbac.create=true`)
+- [ ] Скейл-ап/даун на k3d не выполнить без CAPD (Cluster API Provider Docker) — компонент задеплоен (replicas=0), обоснование в отчёте
+- [ ] **Дополнительно HPA** на микросервисах — будет в Фазе 5 (helm charts) → драйвер для CA под нагрузкой Locust
+- [ ] Скриншот: график количества нод и pod'ов в Grafana во время нагрузочного теста *(Фаза 6)*
 
 **Критерий готовности фазы:** кластер работает, Cilium показывает трафик в Hubble, CA реагирует на нагрузку.
 
@@ -206,38 +202,28 @@ VIP на macOS-хост не пробрасывается, но **полноце
 **Цель:** вся конфигурация описана в Terraform и Git, ArgoCD автоматически синхронизирует.
 
 ### Шаг 2.1 — Terraform базовый слой
-- [ ] `infrastructure/terraform/environments/local/main.tf`:
-  - провайдеры `kubernetes`, `helm`, `kubectl`
-  - бэкенд: локальный state (для прод — S3/Consul)
-- [ ] Модуль `modules/namespaces`: создаёт `platform`, `apps`, `monitoring`, `istio-system`, `argocd`, `kafka`, `cicd`
-- [ ] Модуль `modules/service-accounts`: SA для каждого сервиса с минимальными ролями
-- [ ] Модуль `modules/secrets`: базовые секреты (Postgres password, MinIO keys, JWT secret) из `terraform.tfvars` (gitignored) или Vault
-- [ ] `terraform apply` → все ns/sa/secrets созданы
+- [x] `infrastructure/terraform/environments/local/main.tf` — провайдеры `kubernetes`+`helm`, локальный state
+- [x] Модуль `modules/namespaces` — 9 ns: apps, platform, kafka, monitoring, istio-system, argocd, cicd, frontend, rate-limit (apps с `istio-injection=enabled`)
+- [x] Модуль `modules/service-accounts` — 5 SA в `apps` (user/document/embedding/query/locust) + 1 в `frontend`
+- [x] Модуль `modules/secrets` — postgres-credentials, minio-credentials, jwt-secret (из `terraform.tfvars`, gitignored)
+- [x] `terraform apply` → **21 ресурс создан**
 
 ### Шаг 2.2 — ArgoCD
-- [ ] Модуль `modules/argocd`: устанавливает ArgoCD через `helm_release` (chart `argo/argo-cd`)
-- [ ] Создать корневой `Application` (App-of-Apps) в `gitops/bootstrap/root-app.yaml`:
-  - source: `repoURL: github.com/<user>/2_sem`, `path: gitops/apps`
-  - syncPolicy: `automated: { prune: true, selfHeal: true }`
-- [ ] В `gitops/apps/` положить `Application` CR для каждой сущности:
-  - `istio.yaml` → `gitops/platform/istio/`
-  - `strimzi.yaml` → `gitops/platform/strimzi/`
-  - `observability.yaml` → `gitops/platform/observability/`
-  - `rate-limit.yaml` → `gitops/platform/rate-limit/`
-  - `workloads.yaml` → `gitops/workloads/` (все 4 микросервиса)
-- [ ] Применить root-app: `kubectl apply -f gitops/bootstrap/root-app.yaml`
-- [ ] Скриншот ArgoCD UI со всеми Healthy/Synced
+- [x] Модуль `modules/argocd` — helm chart `argo/argo-cd 7.6.12` (7.7.x ломается на k3d из-за redis-secret-init job)
+- [x] Корневой `Application` (App-of-Apps) в `gitops/bootstrap/root-app.yaml` с auto-sync, prune, selfHeal
+- [x] В `gitops/apps/` дочерние Applications:
+  - [x] `network-policies.yaml` → `gitops/platform/network-policies/` ✅ Synced/Healthy
+  - [ ] `strimzi.yaml` → `gitops/platform/strimzi/` ⚠️ в процессе фикса (выношу strimzi-operator в bootstrap/)
+  - [ ] `istio.yaml`, `observability.yaml`, `rate-limit.yaml`, `workloads.yaml` — будут в Фазах 3/4/5
+- [x] Применить root-app: `kubectl apply -f gitops/bootstrap/root-app.yaml`
+- [ ] Скриншот ArgoCD UI со всеми Healthy/Synced *(Фаза 7)*
 
 ### Шаг 2.3 — Ansible Role для Kafka (Strimzi)
-- [ ] `infrastructure/ansible/roles/strimzi-operator/`:
-  - tasks: добавить helm-repo strimzi, установить chart `strimzi-kafka-operator` в ns `kafka`
-  - defaults: версия оператора, namespace
-- [ ] `infrastructure/ansible/roles/kafka/`:
-  - tasks: применить манифесты `KafkaCluster` (KRaft mode, 1 брокер для dev / 3 для prod) и `KafkaTopic`
-  - templates: `kafka.yaml.j2`, `topics.yaml.j2` (топики: `document.uploaded`, `embedding.completed`)
-- [ ] Playbook `playbooks/deploy-kafka.yml`
-- [ ] Запуск: `ansible-playbook -i inventory/local.ini playbooks/deploy-kafka.yml`
-- [ ] Проверить: `kubectl -n kafka get kafka,kafkatopic` → Ready
+- [x] `infrastructure/ansible/roles/strimzi-operator/` — defaults+tasks+templates, генерирует ArgoCD Application для Strimzi через OCI helm chart `oci://quay.io/strimzi-helm`
+- [x] `infrastructure/ansible/roles/kafka/` — defaults+tasks+templates `kafka-cluster.yaml.j2` (KafkaNodePool + Kafka KRaft) и `kafka-topics.yaml.j2` (топики `document.uploaded`, `embedding.completed`)
+- [x] Playbook `playbooks/deploy-kafka.yml`
+- [x] Запуск: `ansible-playbook playbooks/deploy-kafka.yml` — манифесты сгенерированы
+- [ ] Проверить: `kubectl -n kafka get kafka,kafkatopic` → Ready *(в процессе: исправление App-of-Apps структуры под sync-wave)*
 
 **Критерий готовности:** в ArgoCD UI видны все Applications со статусом Synced/Healthy, Kafka брокеры работают.
 
@@ -329,11 +315,9 @@ VIP на macOS-хост не пробрасывается, но **полноце
 - [ ] `ServiceDown`: probe `up == 0` 2 минуты
 - [ ] `CircuitBreakerOpen`: `istio_request_total{response_code=~"5.."}` resets > 5 за 30с
 
-### Шаг 4.6 (опционально) — AI-monitoring
-- [ ] Рассмотреть **k8sgpt** для AI-анализа кластера: `k8sgpt analyze --explain`
-- [ ] Опционально **RobustaAI** для алертов с LLM-объяснением
-
 **Критерий готовности:** в Grafana видны все 5 дашбордов с реальными данными; алерты срабатывают при искусственной деградации.
+
+> **AI-monitoring** (k8sgpt, RobustaAI и т.п.) задание помечает как «опционально» — в эту фазу не включаем, в отчёте укажем как возможное расширение для prod.
 
 ---
 

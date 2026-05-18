@@ -12,10 +12,10 @@
 - name: Сгенерировать ArgoCD Application для Strimzi-оператора
   ansible.builtin.template:
     src: argocd-application.yaml.j2
-    dest: "{{ strimzi_gitops_dir }}/00-strimzi-operator-app.yaml"
+    dest: "{{ strimzi_gitops_dir }}/strimzi-operator-app.yaml"
     mode: "0644"
   register: strimzi_app_rendered
 
 - name: Показать, что было сгенерировано
   ansible.builtin.debug:
-    msg: "Strimzi-operator ArgoCD Application: {{ strimzi_gitops_dir }}/00-strimzi-operator-app.yaml (changed={{ strimzi_app_rendered.changed }})"
+    msg: "Strimzi-operator ArgoCD Application: {{ strimzi_gitops_dir }}/strimzi-operator-app.yaml (changed={{ strimzi_app_rendered.changed }})"
