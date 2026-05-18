@@ -1,0 +1,234 @@
+# Стек observability: VictoriaMetrics + VictoriaLogs + Tempo + Grafana + OTel.
+# Четыре независимых Helm Application'а, синкаются с sync-wave последовательно
+# чтобы datasources в Grafana успели подключиться к работающим бэкендам.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: victoria-metrics
+  namespace: argocd
+  finalizers: ["resources-finalizer.argocd.argoproj.io"]
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://victoriametrics.github.io/helm-charts/
+    chart: victoria-metrics-cluster
+    targetRevision: "0.18.0"
+    helm:
+      releaseName: vm
+      values: |
+        # Минимальная конфигурация для k3d: 1 реплика каждого компонента
+        vmstorage:
+          replicaCount: 1
+          persistentVolume:
+            enabled: false   # ephemeral для dev
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+        vminsert:
+          replicaCount: 1
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { cpu: 200m, memory: 256Mi }
+        vmselect:
+          replicaCount: 1
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { cpu: 200m, memory: 256Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: ["ServerSideApply=true"]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: victoria-logs
+  namespace: argocd
+  finalizers: ["resources-finalizer.argocd.argoproj.io"]
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://victoriametrics.github.io/helm-charts/
+    chart: victoria-logs-single
+    targetRevision: "0.8.0"
+    helm:
+      releaseName: vl
+      values: |
+        server:
+          persistentVolume:
+            enabled: false
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { cpu: 300m, memory: 384Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: ["ServerSideApply=true"]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tempo
+  namespace: argocd
+  finalizers: ["resources-finalizer.argocd.argoproj.io"]
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: tempo
+    targetRevision: "1.16.0"
+    helm:
+      releaseName: tempo
+      values: |
+        tempo:
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { cpu: 300m, memory: 384Mi }
+        persistence:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+---
+# OpenTelemetry Collector — принимает OTLP-трафик от микросервисов
+# и раздаёт в VictoriaMetrics (метрики), VictoriaLogs (логи), Tempo (трейсы).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel-collector
+  namespace: argocd
+  finalizers: ["resources-finalizer.argocd.argoproj.io"]
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  source:
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+    chart: opentelemetry-collector
+    targetRevision: "0.108.0"
+    helm:
+      releaseName: otel
+      values: |
+        mode: deployment
+        image:
+          repository: otel/opentelemetry-collector-contrib
+        resources:
+          requests: { cpu: 50m, memory: 128Mi }
+          limits:   { cpu: 300m, memory: 256Mi }
+        config:
+          receivers:
+            otlp:
+              protocols:
+                grpc: { endpoint: 0.0.0.0:4317 }
+                http: { endpoint: 0.0.0.0:4318 }
+            prometheus:
+              config:
+                scrape_configs:
+                  - job_name: 'k8s-pods'
+                    kubernetes_sd_configs: [{ role: pod }]
+                    relabel_configs:
+                      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                        action: keep
+                        regex: "true"
+          processors:
+            batch: {}
+            memory_limiter:
+              check_interval: 1s
+              limit_percentage: 75
+              spike_limit_percentage: 15
+          exporters:
+            # Метрики → VictoriaMetrics через remote_write
+            prometheusremotewrite:
+              endpoint: http://vm-vminsert.monitoring.svc.cluster.local:8480/insert/0/prometheus/api/v1/write
+              tls: { insecure: true }
+            # Трейсы → Tempo OTLP
+            otlp/tempo:
+              endpoint: tempo.monitoring.svc.cluster.local:4317
+              tls: { insecure: true }
+            # Логи → VictoriaLogs через JSON
+            otlphttp/vlogs:
+              endpoint: http://vl-victoria-logs-single-server.monitoring.svc.cluster.local:9428/insert/opentelemetry/v1/logs
+          service:
+            pipelines:
+              metrics:
+                receivers: [otlp, prometheus]
+                processors: [memory_limiter, batch]
+                exporters: [prometheusremotewrite]
+              traces:
+                receivers: [otlp]
+                processors: [memory_limiter, batch]
+                exporters: [otlp/tempo]
+              logs:
+                receivers: [otlp]
+                processors: [memory_limiter, batch]
+                exporters: [otlphttp/vlogs]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana
+  namespace: argocd
+  finalizers: ["resources-finalizer.argocd.argoproj.io"]
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: grafana
+    targetRevision: "8.6.0"
+    helm:
+      releaseName: grafana
+      values: |
+        adminUser: admin
+        adminPassword: admin   # ОК для локалки, в prod через secret
+        service:
+          type: ClusterIP
+        resources:
+          requests: { cpu: 50m, memory: 128Mi }
+          limits:   { cpu: 300m, memory: 256Mi }
+        persistence: { enabled: false }
+        # Pre-configured datasources
+        datasources:
+          datasources.yaml:
+            apiVersion: 1
+            datasources:
+              - name: VictoriaMetrics
+                type: prometheus
+                isDefault: true
+                url: http://vm-vmselect.monitoring.svc.cluster.local:8481/select/0/prometheus
+                access: proxy
+              - name: VictoriaLogs
+                type: victoriametrics-logs-datasource
+                url: http://vl-victoria-logs-single-server.monitoring.svc.cluster.local:9428
+                access: proxy
+              - name: Tempo
+                type: tempo
+                url: http://tempo.monitoring.svc.cluster.local:3100
+                access: proxy
+        # Плагин VictoriaLogs datasource
+        plugins:
+          - victoriametrics-logs-datasource
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

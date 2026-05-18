@@ -1,0 +1,58 @@
+# Alertmanager — принимает алерты от vmalert.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: default
+      group_by: [alertname, severity]
+      group_wait: 10s
+      group_interval: 30s
+      repeat_interval: 1h
+    receivers:
+      - name: default
+        # В prod — Slack/Email/PagerDuty webhook.
+        # В dev: smtp-выключен, логируем в stdout.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: alertmanager } }
+  template:
+    metadata:
+      labels: { app: alertmanager }
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.27.0
+          args:
+            - "--config.file=/etc/alertmanager/alertmanager.yml"
+            - "--log.level=info"
+          ports: [{ containerPort: 9093 }]
+          volumeMounts:
+            - { name: config, mountPath: /etc/alertmanager }
+          resources:
+            requests: { cpu: 30m, memory: 64Mi }
+            limits:   { cpu: 100m, memory: 128Mi }
+      volumes:
+        - name: config
+          configMap: { name: alertmanager-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  selector: { app: alertmanager }
+  ports: [{ port: 9093, targetPort: 9093 }]

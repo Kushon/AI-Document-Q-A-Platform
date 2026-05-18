@@ -1,0 +1,41 @@
+# vmalert: читает правила из ConfigMap и шлёт срабатывания в Alertmanager.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmalert
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: vmalert } }
+  template:
+    metadata:
+      labels: { app: vmalert }
+    spec:
+      containers:
+        - name: vmalert
+          image: victoriametrics/vmalert:v1.107.0
+          args:
+            - "-datasource.url=http://vm-vmselect.monitoring.svc.cluster.local:8481/select/0/prometheus"
+            - "-remoteWrite.url=http://vm-vminsert.monitoring.svc.cluster.local:8480/insert/0/prometheus"
+            - "-notifier.url=http://alertmanager.monitoring.svc.cluster.local:9093"
+            - "-rule=/etc/rules/*.rules"
+            - "-evaluationInterval=30s"
+          ports: [{ containerPort: 8880 }]
+          volumeMounts:
+            - { name: rules, mountPath: /etc/rules }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+      volumes:
+        - name: rules
+          configMap: { name: vmalert-rules }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmalert
+  namespace: monitoring
+spec:
+  selector: { app: vmalert }
+  ports: [{ port: 8880, targetPort: 8880 }]
