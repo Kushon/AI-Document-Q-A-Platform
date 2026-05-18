@@ -1,0 +1,29 @@
+# ConfigMap с правилами Envoy Rate Limit Service.
+# Формат: https://github.com/envoyproxy/ratelimit#example-1
+#
+# Ключи descriptors задаются в EnvoyFilter (20-envoyfilter.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ratelimit-config
+  namespace: rate-limit
+data:
+  config.yaml: |
+    domain: pi-gateway
+    descriptors:
+      # /query — 10 запросов в минуту на IP клиента
+      - key: path_method
+        value: "POST_/query/"
+        descriptors:
+          - key: remote_address
+            rate_limit:
+              unit: minute
+              requests_per_unit: 10
+      # /documents — 30 запросов в минуту на IP (upload файлов)
+      - key: path_method
+        value: "POST_/documents/"
+        descriptors:
+          - key: remote_address
+            rate_limit:
+              unit: minute
+              requests_per_unit: 30

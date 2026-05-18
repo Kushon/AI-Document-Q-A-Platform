@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rate-limit
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"   # после Istio CRDs
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Kushon/AI-Document-Q-A-Platform.git
+    targetRevision: feature/k8s-platform
+    path: gitops/platform/rate-limit
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: rate-limit
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true

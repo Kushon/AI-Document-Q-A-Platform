@@ -1,0 +1,34 @@
+# Valkey (Redis-compatible) — backend для счётчиков Envoy Rate Limit Service.
+# Лёгкий deployment с in-memory storage, для prod использовать кластер.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ratelimit-valkey
+  namespace: rate-limit
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ratelimit-valkey }
+  template:
+    metadata:
+      labels: { app: ratelimit-valkey }
+    spec:
+      containers:
+        - name: valkey
+          image: valkey/valkey:7-alpine
+          args: ["--maxmemory", "100mb", "--maxmemory-policy", "allkeys-lru"]
+          ports: [{ containerPort: 6379, name: redis }]
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ratelimit-valkey
+  namespace: rate-limit
+spec:
+  selector: { app: ratelimit-valkey }
+  ports:
+    - { port: 6379, targetPort: 6379, name: redis }
