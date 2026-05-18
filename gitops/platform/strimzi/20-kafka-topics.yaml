@@ -8,6 +8,8 @@ metadata:
   namespace: kafka
   labels:
     strimzi.io/cluster: pi-kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"   # после создания Kafka cluster
 spec:
   topicName: document.uploaded
   partitions: 3
@@ -23,6 +25,8 @@ metadata:
   namespace: kafka
   labels:
     strimzi.io/cluster: pi-kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"   # после создания Kafka cluster
 spec:
   topicName: embedding.completed
   partitions: 3

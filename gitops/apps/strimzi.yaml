@@ -21,4 +21,12 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - ServerSideApply=true   # KafkaCluster CRD большой, server-side apply надёжнее
+      - ServerSideApply=true             # KafkaCluster CRD большой, SSA надёжнее
+      - SkipDryRunOnMissingResource=true # CRDs появляются только после установки оператора
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        maxDuration: 2m
+        factor: 2

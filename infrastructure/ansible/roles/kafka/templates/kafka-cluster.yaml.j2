@@ -10,6 +10,8 @@ metadata:
   namespace: {{ kafka_namespace }}
   labels:
     strimzi.io/cluster: {{ kafka_cluster_name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"   # после установки Strimzi CRDs
 spec:
   replicas: {{ kafka_controller_replicas }}
   roles:
@@ -60,6 +62,7 @@ metadata:
   annotations:
     strimzi.io/node-pools: enabled
     strimzi.io/kraft: enabled
+    argocd.argoproj.io/sync-wave: "1"   # после установки Strimzi CRDs
 spec:
   kafka:
     version: "{{ kafka_version }}"
