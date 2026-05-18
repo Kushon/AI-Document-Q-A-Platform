@@ -10,6 +10,12 @@
 charts/*/charts/
 charts/*/Chart.lock
 
+# Документы и заметки (планы, отчёты) — кроме README в любых папках
+*.md
+*.pdf
+!README.md
+!**/README.md
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
