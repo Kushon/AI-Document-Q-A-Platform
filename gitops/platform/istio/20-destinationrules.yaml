@@ -1,0 +1,71 @@
+# DestinationRule'ы — Circuit Breaker через outlierDetection (задание 3.1).
+# При 3 ошибках 5xx подряд endpoint удаляется из пула на 30 сек.
+#
+# connectionPool:
+#   - tcp.maxConnections: ограничение одновременных TCP-соединений
+#   - http.http1MaxPendingRequests: очередь pending запросов
+#
+# outlierDetection:
+#   - consecutive5xxErrors: 3 → endpoint считается unhealthy
+#   - interval: 10s → как часто проверять
+#   - baseEjectionTime: 30s → на сколько минимум исключить
+#   - maxEjectionPercent: 50 → не больше половины endpoint'ов
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: user-service
+  namespace: apps
+spec:
+  host: user-service.apps.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      tcp: { maxConnections: 100 }
+      http:
+        http1MaxPendingRequests: 50
+        maxRequestsPerConnection: 10
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: document-service
+  namespace: apps
+spec:
+  host: document-service.apps.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      tcp: { maxConnections: 50 }
+      http:
+        http1MaxPendingRequests: 20
+        maxRequestsPerConnection: 5
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: query-service
+  namespace: apps
+spec:
+  host: query-service.apps.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      tcp: { maxConnections: 50 }
+      http:
+        http1MaxPendingRequests: 20
+        maxRequestsPerConnection: 5
+    # query-service самый частый объект chaos-теста в Фазе 6 —
+    # ставим более чувствительный circuit breaker.
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 100   # для демо разрешаем выкинуть все endpoint'ы

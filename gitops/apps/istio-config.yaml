@@ -1,0 +1,33 @@
+# Gateway + VirtualService + DestinationRule.
+# Применяется после установки istio-base + istiod (CRDs должны быть).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-config
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"   # после istiod (wave -1) и ingressgateway (0)
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Kushon/AI-Document-Q-A-Platform.git
+    targetRevision: feature/k8s-platform
+    path: gitops/platform/istio
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        maxDuration: 2m
+        factor: 2

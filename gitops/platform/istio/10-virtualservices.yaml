@@ -1,0 +1,71 @@
+# VirtualService'ы для микросервисов из Блока 1.
+# Маршрутизация HTTP-путей на конкретные сервисы + retry-политика
+# (задание 3.1: retry между микросервисами).
+#
+# Пути совпадают с nginx-конфигом из Блока 1:
+#   /auth/*      → user-service:8000
+#   /documents/* → document-service:8000
+#   /query/*     → query-service:8000
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: user-service
+  namespace: apps
+spec:
+  hosts: ["*"]
+  gateways:
+    - istio-system/pi-gateway
+  http:
+    - match:
+        - uri: { prefix: /auth/ }
+      route:
+        - destination:
+            host: user-service.apps.svc.cluster.local
+            port: { number: 8000 }
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: document-service
+  namespace: apps
+spec:
+  hosts: ["*"]
+  gateways:
+    - istio-system/pi-gateway
+  http:
+    - match:
+        - uri: { prefix: /documents/ }
+      route:
+        - destination:
+            host: document-service.apps.svc.cluster.local
+            port: { number: 8000 }
+      retries:
+        attempts: 3
+        perTryTimeout: 30s   # upload файлов может быть долгим
+        retryOn: 5xx,reset,connect-failure
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: query-service
+  namespace: apps
+spec:
+  hosts: ["*"]
+  gateways:
+    - istio-system/pi-gateway
+  http:
+    - match:
+        - uri: { prefix: /query/ }
+      route:
+        - destination:
+            host: query-service.apps.svc.cluster.local
+            port: { number: 8000 }
+      retries:
+        attempts: 3
+        perTryTimeout: 10s   # LLM-генерация ответа
+        retryOn: 5xx,reset,connect-failure,refused-stream

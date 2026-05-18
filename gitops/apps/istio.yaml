@@ -1,0 +1,112 @@
+# Istio service mesh — три helm chart'а (base, istiod, gateway) синхронно.
+# Используем ArgoCD ApplicationSet "list generator" чтобы один файл породил
+# три Application'а с правильным sync-wave порядком.
+#
+# istio-base (CRDs) → istiod (control plane) → istio-ingressgateway (data plane)
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-base
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    chart: base
+    targetRevision: "1.24.2"
+    helm:
+      releaseName: istio-base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istiod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"   # после CRDs
+spec:
+  project: default
+  source:
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    chart: istiod
+    targetRevision: "1.24.2"
+    helm:
+      releaseName: istiod
+      values: |
+        # Минимальный pilot для k3d
+        pilot:
+          autoscaleEnabled: false
+          replicaCount: 1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+        # mTLS PERMISSIVE — frontend без sidecar должен иметь возможность
+        # достучаться до сервисов в apps
+        meshConfig:
+          enableTracing: true
+          defaultConfig:
+            tracing:
+              sampling: 100.0
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-ingressgateway
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"     # после istiod
+spec:
+  project: default
+  source:
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    chart: gateway
+    targetRevision: "1.24.2"
+    helm:
+      releaseName: istio-ingressgateway
+      values: |
+        autoscaling:
+          enabled: false
+        replicaCount: 1
+        service:
+          type: ClusterIP   # перед ним будет HAProxy в docker network
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - ServerSideApply=true
