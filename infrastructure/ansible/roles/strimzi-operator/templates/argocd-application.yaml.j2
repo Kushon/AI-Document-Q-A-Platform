@@ -19,17 +19,20 @@ spec:
     helm:
       releaseName: strimzi-operator
       values: |
+        # watchAnyNamespace=false + не указываем watchNamespaces → оператор
+        # watch'ит только namespace где он сам живёт (= {{ strimzi_namespace }}).
+        # Иначе чарт дублирует namespace в STRIMZI_NAMESPACE env.
         watchAnyNamespace: false
-        watchNamespaces:
-          - {{ strimzi_namespace }}
-        # Ресурсы для k3d — поднял после Vertx "Thread blocked" на 100m CPU
+        # JVM по дефолту использует -XX:MaxRAMPercentage=20:
+        # с 1Gi лимита heap = 200Mi → OOM при старте.
+        # Поднимаем memory до 2Gi → 400Mi heap.
         resources:
           requests:
             cpu: 200m
-            memory: 512Mi
+            memory: 768Mi
           limits:
             cpu: "1"
-            memory: 1Gi
+            memory: 2Gi
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ strimzi_namespace }}
