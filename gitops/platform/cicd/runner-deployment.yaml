@@ -1,0 +1,41 @@
+# RunnerDeployment: pod'ы-runner'ы для GitHub Actions.
+# Регистрируются в репозитории Kushon/AI-Document-Q-A-Platform.
+---
+apiVersion: actions.summerwind.dev/v1alpha1
+kind: RunnerDeployment
+metadata:
+  name: pi-platform-runner
+  namespace: cicd
+spec:
+  replicas: 1
+  template:
+    spec:
+      repository: Kushon/AI-Document-Q-A-Platform
+      labels:
+        - self-hosted
+        - linux
+        - pi-platform
+      resources:
+        requests: { cpu: 200m, memory: 512Mi }
+        limits:   { cpu: 1, memory: 1Gi }
+      # Docker socket НЕ монтируем — для build используем Kaniko,
+      # не docker. Это безопаснее и не требует root.
+---
+# Авто-скейл runner'ов по количеству pending jobs (1..5)
+apiVersion: actions.summerwind.dev/v1alpha1
+kind: HorizontalRunnerAutoscaler
+metadata:
+  name: pi-platform-runner-hra
+  namespace: cicd
+spec:
+  scaleTargetRef:
+    kind: RunnerDeployment
+    name: pi-platform-runner
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: PercentageRunnersBusy
+      scaleUpThreshold: "0.75"
+      scaleDownThreshold: "0.25"
+      scaleUpFactor: "2"
+      scaleDownFactor: "0.5"

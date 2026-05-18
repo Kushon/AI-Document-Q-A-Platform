@@ -1,0 +1,40 @@
+# Actions Runner Controller (ARC) — устанавливает GitHub Actions self-hosted
+# runners как pod'ы в k8s. Скейл по количеству pending jobs.
+#
+# До применения нужно создать secret в namespace cicd:
+#   kubectl -n cicd create secret generic gh-app-secret \
+#     --from-literal=github_app_id=<APP_ID> \
+#     --from-literal=github_app_installation_id=<INSTALL_ID> \
+#     --from-file=github_app_private_key=path/to/private-key.pem
+#
+# Альтернативно (проще) — через PAT:
+#   kubectl -n cicd create secret generic gh-runner-secret \
+#     --from-literal=github_token=ghp_xxxxx
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: github-runner
+  namespace: argocd
+  finalizers: ["resources-finalizer.argocd.argoproj.io"]
+spec:
+  project: default
+  source:
+    repoURL: https://actions-runner-controller.github.io/actions-runner-controller
+    chart: actions-runner-controller
+    targetRevision: "0.23.7"
+    helm:
+      releaseName: arc
+      values: |
+        authSecret:
+          create: false
+          name: gh-runner-secret  # PAT-вариант
+        # Реcурсы для controller-pod'а (легковесный)
+        resources:
+          requests: { cpu: 50m, memory: 128Mi }
+          limits:   { cpu: 200m, memory: 256Mi }
+        # Runner-pod'ы спавнятся отдельно по RunnerDeployment CR
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cicd
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

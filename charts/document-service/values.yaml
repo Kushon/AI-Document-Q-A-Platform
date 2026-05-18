@@ -1,0 +1,40 @@
+# Default values для document-service.
+# image.tag меняется CI/CD (см. .github/workflows/build-and-push.yml).
+
+image:
+  repository: k3d-registry.localhost:5001/document-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  port: 8000
+
+# HPA — драйвер для Cluster Autoscaler при нагрузке Locust
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits:   { cpu: 300m, memory: 256Mi }
+
+# OpenTelemetry — endpoint собирается из otel namespace
+otel:
+  endpoint: http://otel-opentelemetry-collector.monitoring.svc.cluster.local:4317
+
+# Подключения к инфраструктуре. Postgres/Valkey/MinIO/Kafka в namespace 'platform'/'kafka'.
+postgres:
+  host: postgres.platform.svc.cluster.local
+  port: 5432
+valkey:
+  host: valkey.platform.svc.cluster.local
+  port: 6379
+kafka:
+  bootstrap: pi-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092
+minio:
+  endpoint: minio.platform.svc.cluster.local:9000

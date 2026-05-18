@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cicd-runners
+  namespace: argocd
+  finalizers: ["resources-finalizer.argocd.argoproj.io"]
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"   # после github-runner controller
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Kushon/AI-Document-Q-A-Platform.git
+    targetRevision: feature/k8s-platform
+    path: gitops/platform/cicd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cicd
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - SkipDryRunOnMissingResource=true

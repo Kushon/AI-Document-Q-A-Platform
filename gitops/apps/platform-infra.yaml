@@ -1,0 +1,126 @@
+# Инфраструктура для микросервисов (Postgres, Valkey, Qdrant, MinIO).
+# Каждый сервис — отдельный Application с bitnami-чартом, чтобы можно было
+# скейлить/обновлять независимо.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres
+  namespace: argocd
+  finalizers: ["resources-finalizer.argocd.argoproj.io"]
+spec:
+  project: default
+  source:
+    repoURL: https://charts.bitnami.com/bitnami
+    chart: postgresql
+    targetRevision: "16.2.3"
+    helm:
+      releaseName: postgres
+      values: |
+        fullnameOverride: postgres
+        auth:
+          existingSecret: postgres-credentials
+          secretKeys:
+            adminPasswordKey: POSTGRES_PASSWORD
+            userPasswordKey: POSTGRES_PASSWORD
+            replicationPasswordKey: POSTGRES_PASSWORD
+          username: rag
+          database: ragdb
+        primary:
+          persistence: { enabled: false }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: valkey
+  namespace: argocd
+  finalizers: ["resources-finalizer.argocd.argoproj.io"]
+spec:
+  project: default
+  source:
+    repoURL: https://charts.bitnami.com/bitnami
+    chart: valkey
+    targetRevision: "2.4.0"
+    helm:
+      releaseName: valkey
+      values: |
+        fullnameOverride: valkey
+        architecture: standalone
+        auth: { enabled: false }
+        master:
+          persistence: { enabled: false }
+          resources:
+            requests: { cpu: 30m, memory: 64Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: qdrant
+  namespace: argocd
+  finalizers: ["resources-finalizer.argocd.argoproj.io"]
+spec:
+  project: default
+  source:
+    repoURL: https://qdrant.github.io/qdrant-helm
+    chart: qdrant
+    targetRevision: "0.10.0"
+    helm:
+      releaseName: qdrant
+      values: |
+        fullnameOverride: qdrant
+        replicaCount: 1
+        persistence: { size: 2Gi }
+        resources:
+          requests: { cpu: 100m, memory: 256Mi }
+          limits:   { cpu: 500m, memory: 512Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: minio
+  namespace: argocd
+  finalizers: ["resources-finalizer.argocd.argoproj.io"]
+spec:
+  project: default
+  source:
+    repoURL: https://charts.bitnami.com/bitnami
+    chart: minio
+    targetRevision: "14.10.0"
+    helm:
+      releaseName: minio
+      values: |
+        fullnameOverride: minio
+        auth:
+          existingSecret: minio-credentials
+          rootUserSecretKey: MINIO_ROOT_USER
+          rootPasswordSecretKey: MINIO_ROOT_PASSWORD
+        mode: standalone
+        persistence:
+          size: 5Gi
+        resources:
+          requests: { cpu: 100m, memory: 256Mi }
+          limits:   { cpu: 500m, memory: 512Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

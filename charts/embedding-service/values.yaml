@@ -1,0 +1,41 @@
+# embedding-service: чисто Kafka consumer, без HTTP.
+image:
+  repository: k3d-registry.localhost:5001/embedding-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+# HPA по CPU, но обычно scale через Kafka lag (KEDA, не реализовано здесь)
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits:   { cpu: 500m, memory: 512Mi }
+
+otel:
+  endpoint: http://otel-opentelemetry-collector.monitoring.svc.cluster.local:4317
+
+kafka:
+  bootstrap: pi-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092
+  consumerGroup: embedding-service
+
+postgres:
+  host: postgres.platform.svc.cluster.local
+  port: 5432
+
+qdrant:
+  host: qdrant.platform.svc.cluster.local
+  port: 6333
+
+minio:
+  endpoint: minio.platform.svc.cluster.local:9000
+
+ollama:
+  # Ollama бежит на хосте macOS, доступ из k3d через host.k3d.internal
+  baseUrl: http://host.k3d.internal:11434/v1
+  embedModel: nomic-embed-text

@@ -1,0 +1,44 @@
+# Default values для query-service.
+# image.tag меняется CI/CD (см. .github/workflows/build-and-push.yml).
+
+image:
+  repository: k3d-registry.localhost:5001/query-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  port: 8000
+
+# HPA — драйвер для Cluster Autoscaler при нагрузке Locust
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits:   { cpu: 300m, memory: 256Mi }
+
+# OpenTelemetry — endpoint собирается из otel namespace
+otel:
+  endpoint: http://otel-opentelemetry-collector.monitoring.svc.cluster.local:4317
+
+# Подключения к инфраструктуре. Postgres/Valkey ставятся отдельным chart'ом
+# в namespace 'platform' (см. charts/platform-common/).
+postgres:
+  host: postgres.platform.svc.cluster.local
+  port: 5432
+valkey:
+  host: valkey.platform.svc.cluster.local
+  port: 6379
+qdrant:
+  host: qdrant.platform.svc.cluster.local
+  port: 6333
+ollama:
+  baseUrl: http://host.k3d.internal:11434/v1
+  chatModel: gemma3:4b
+  embedModel: nomic-embed-text

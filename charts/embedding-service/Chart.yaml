@@ -1,0 +1,6 @@
+apiVersion: v2
+name: embedding-service
+description: Kafka consumer — chunks documents, generates embeddings, writes to Qdrant
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

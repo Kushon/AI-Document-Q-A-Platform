@@ -1,0 +1,83 @@
+# CI pipeline для микросервисов.
+# Триггер: push в main или feature/* с изменениями в services/<svc>/.
+#
+# Job-ы:
+#   1. detect-changes — определяет какие сервисы изменились (path-filter)
+#   2. build (matrix)  — Kaniko сборка + push в k3d-registry.localhost:5001
+#   3. bump-tag         — sed image.tag в charts/<svc>/values.yaml + git push
+#                         ArgoCD сам подхватит изменение values.yaml и развернёт.
+name: Build and Push Microservices
+
+on:
+  push:
+    branches: [main, "feature/**"]
+    paths:
+      - "services/**"
+      - "charts/**"
+      - ".github/workflows/build-and-push.yml"
+  workflow_dispatch:
+
+jobs:
+  detect-changes:
+    runs-on: [self-hosted, pi-platform]
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            user-service:       'services/user-service/**'
+            document-service:   'services/document-service/**'
+            embedding-service:  'services/embedding-service/**'
+            query-service:      'services/query-service/**'
+
+  build:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.services != '[]' }}
+    runs-on: [self-hosted, pi-platform]
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Запускаем Kaniko как kubectl-job в текущем кластере.
+      # Kaniko строит образ внутри pod'а без docker daemon.
+      - name: Build & push with Kaniko
+        run: |
+          set -euo pipefail
+          IMAGE="k3d-registry.localhost:5001/${{ matrix.service }}:${{ github.sha }}"
+          POD="kaniko-${{ matrix.service }}-${{ github.run_id }}"
+          kubectl -n cicd run "$POD" \
+            --image=gcr.io/kaniko-project/executor:latest \
+            --restart=Never --rm -i --tty=false --image-pull-policy=IfNotPresent \
+            --overrides='{"spec":{"containers":[{"name":"kaniko","image":"gcr.io/kaniko-project/executor:latest","args":["--dockerfile=services/${{ matrix.service }}/Dockerfile","--context=git://github.com/Kushon/AI-Document-Q-A-Platform.git#refs/heads/${{ github.ref_name }}","--destination='"$IMAGE"'","--insecure","--insecure-pull","--skip-tls-verify"]}],"restartPolicy":"Never"}}'
+
+  bump-tag:
+    needs: build
+    if: ${{ needs.detect-changes.outputs.services != '[]' && success() }}
+    runs-on: [self-hosted, pi-platform]
+    strategy:
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}    # PAT с write для commit обратно
+
+      - name: Update Helm values
+        run: |
+          set -euo pipefail
+          cd charts/${{ matrix.service }}
+          sed -i "s|tag: .*|tag: ${{ github.sha }}|" values.yaml
+
+      - name: Commit & push
+        run: |
+          git config user.name  "ci-bot"
+          git config user.email "ci-bot@pi-platform"
+          git add charts/${{ matrix.service }}/values.yaml
+          git diff --cached --quiet || git commit -m "ci: bump ${{ matrix.service }} to ${{ github.sha }}"
+          git push
